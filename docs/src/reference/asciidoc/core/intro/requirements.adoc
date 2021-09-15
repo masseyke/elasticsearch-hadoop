@@ -5,7 +5,8 @@ Before running {eh}, please do check out the requirements below. This is even mo
 
 NOTE: make sure to verify *all* nodes in a cluster when checking the version of a certain artifact.
 
-TIP: {eh} adds no extra requirements to Hadoop (or the various libraries built on top of it, such as Pig) or {es} however as a rule of thumb, do use the latest stable version of the said library (checking the compatibility with Hadoop and the JDK, where applicable).
+TIP: {eh} adds no extra requirements to Hadoop (or the various libraries built on top of it, such as Hive) or {es} however as a rule of
+thumb, do use the latest stable version of the said library (checking the compatibility with Hadoop and the JDK, where applicable).
 
 [[requirements-jdk]]
 === JDK
@@ -82,19 +83,6 @@ $ bin/hive --version
 Hive version {hv-v}
 ----
 
-[[requirements-pig]]
-=== Apache Pig
-
-Pig 0.10.0 or higher. We recommend using the latest release of Pig (currently {pg-v}).
-
-In a similar fashion, Pig version can be discovered from its folder path or through the command-line:
-
-["source","bash",subs="attributes"]
-----
-$ bin/pig -i
-Apache Pig version {pg-v}
-----
-
 [[requirements-spark]]
 === Apache Spark
 
@@ -140,17 +128,4 @@ https://spark.apache.org/docs/latest/sql-programming-guide.html#upgrading-from-s
 with Spark SQL 1.6 or lower, {eh} provides a dedicated jar. See the Spark chapter for more information.
 Note that Spark 1.0-1.2 are no longer supported (again due to backwards incompatible changes in Spark).
 
-[[requirements-storm]]
-=== Apache Storm
-
-Storm 1.0.0 or higher. Do note that Storm 1.0.0 broke backwards compatibility with the previous versions (by changing the package name)
-however upgrading is easy and recommended. We recommend using the latest release of Storm (currently {st-v}).
-
-One can discover the Storm version by looking at its folder or by invoking the command:
-
-["source","bash",subs="attributes"]
-----
-$ bin/storm version
-{st-v}
-----
 

@@ -42,7 +42,7 @@ import org.elasticsearch.hadoop.EsHadoopIllegalStateException;
 import org.elasticsearch.hadoop.serialization.EsHadoopSerializationException;
 
 /**
- * Utility class used internally for the Pig support.
+ * Utility class used internally.
  */
 public abstract class IOUtils {
 
