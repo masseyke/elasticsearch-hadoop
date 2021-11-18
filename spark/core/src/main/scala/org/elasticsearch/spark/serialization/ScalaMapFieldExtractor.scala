@@ -18,7 +18,6 @@
  */
 package org.elasticsearch.spark.serialization
 
-import scala.collection.GenMapLike
 import scala.collection.Map
 
 import org.elasticsearch.hadoop.serialization.field.ConstantFieldExtractor

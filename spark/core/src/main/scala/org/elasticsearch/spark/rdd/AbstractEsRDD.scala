@@ -18,8 +18,6 @@
  */
 package org.elasticsearch.spark.rdd;
 
-import scala.collection.JavaConversions.collectionAsScalaIterable
-import scala.collection.JavaConversions.mapAsJavaMap
 import scala.reflect.ClassTag
 import org.apache.commons.logging.LogFactory
 import org.apache.spark.Partition
@@ -34,6 +32,7 @@ import org.elasticsearch.spark.cfg.SparkSettingsManager
 import org.elasticsearch.hadoop.rest.RestRepository
 
 import scala.annotation.meta.param
+import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
 
 private[spark] abstract class AbstractEsRDD[T: ClassTag](
   @(transient @param) sc: SparkContext,
@@ -70,7 +69,10 @@ private[spark] abstract class AbstractEsRDD[T: ClassTag](
 
   @transient private[spark] lazy val esCfg = {
     val cfg = new SparkSettingsManager().load(sc.getConf).copy();
-    cfg.merge(params)
+//    cfg.merge(params)
+    if (params != null) {
+      params.foreach(entry => cfg.setProperty(entry._1, entry._2))
+    }
     InitializationUtils.setUserProviderIfNotSet(cfg, classOf[HadoopUserProvider], logger)
     cfg
   }

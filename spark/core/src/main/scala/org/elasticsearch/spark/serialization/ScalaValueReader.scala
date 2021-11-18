@@ -70,6 +70,7 @@ class ScalaValueReader extends AbstractValueReader with SettingsAware {
   var arrayExclude: JList[String] = Collections.emptyList()
 
   def readValue(parser: Parser, value: String, esType: FieldType) = {
+    System.out.println("In ScalaValueReader::readValue")
     if (esType == null || parser.currentToken() == VALUE_NULL) {
       nullValue()
 

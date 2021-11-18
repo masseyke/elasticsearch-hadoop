@@ -31,6 +31,10 @@ include 'sql-30'
 project(":sql-30").projectDir = new File(settingsDir, "spark/sql-30")
 project(":sql-30").name = "elasticsearch-spark-30"
 
+include 'sql-32'
+project(":sql-32").projectDir = new File(settingsDir, "spark/sql-32")
+project(":sql-32").name = "elasticsearch-spark-32"
+
 include 'storm'
 project(":storm").name = "elasticsearch-storm"
 

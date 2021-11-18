@@ -250,6 +250,7 @@ public class ScrollReader implements Closeable {
 
         //copy content
         BytesArray copy = IOUtils.asBytes(content);
+        System.out.println("Attempting to parse: " + copy);
         content = new FastByteArrayInputStream(copy);
 
         if (log.isTraceEnabled()) {
@@ -270,8 +271,9 @@ public class ScrollReader implements Closeable {
         Token token = ParsingUtils.seek(parser, SCROLL_ID);
         Assert.isTrue(token == Token.VALUE_STRING, "invalid response");
         String scrollId = parser.text();
-
+        System.out.println("ScrollId: " + scrollId);
         long totalHits = hitsTotal(parser);
+        System.out.println("totalHits: " + totalHits);
         // check hits/total
         if (totalHits == 0) {
             return Scroll.empty(scrollId);
@@ -536,6 +538,7 @@ public class ScrollReader implements Closeable {
             parsingCallback.beginDoc();
         }
         // read everything until SOURCE or FIELDS is encountered
+        System.out.println("readMetadata: " + readMetadata);
         if (readMetadata) {
             if (parsingCallback != null) {
                 parsingCallback.beginLeadMetadata();
@@ -555,6 +558,7 @@ public class ScrollReader implements Closeable {
 
                 if (t == Token.FIELD_NAME) {
                     if (!("fields".equals(name) || "_source".equals(name))) {
+                        System.out.println("Found fields");
                         reader.beginField(absoluteName);
                         value = read(absoluteName, parser.nextToken(), null, parser);
                         if (ID_FIELD.equals(name)) {
@@ -588,6 +592,7 @@ public class ScrollReader implements Closeable {
         else {
             Assert.notNull(ParsingUtils.seek(parser, ID), "no id found");
             result[0] = reader.wrapString(parser.text());
+            System.out.println("Found id: " + result[0]);
             t = ParsingUtils.seek(parser, SOURCE, FIELDS);
         }
 
@@ -872,12 +877,15 @@ public class ScrollReader implements Closeable {
     }
 
     protected Object read(String fieldName, Token t, String fieldMapping, Parser parser) {
+        System.out.println("Reading field " + fieldName + " with mapping " + fieldMapping);
         if (t == Token.START_ARRAY) {
+            System.out.println("*** start array");
             return list(fieldName, fieldMapping, parser);
         }
 
         // handle nested nodes first
         else if (t == Token.START_OBJECT) {
+            System.out.println("*** start object");
             // Check if the object field is a nested object or a field that should be considered an array.
             FieldType esType = mapping(fieldMapping, parser);
             if ((esType != null && esType.equals(FieldType.NESTED)) || isArrayField(fieldMapping)) {
@@ -886,6 +894,7 @@ public class ScrollReader implements Closeable {
                 // that only have one nested element.)
                 return singletonList(fieldMapping, map(fieldMapping, parser), parser);
             } else {
+                System.out.println("*** map here");
                 return map(fieldMapping, parser);
             }
         }
@@ -941,6 +950,7 @@ public class ScrollReader implements Closeable {
     }
 
     private Object parseValue(Parser parser, FieldType esType) {
+        System.out.println("In ScrollReader::parseValue");
         Object obj;
         // special case of handing null (as text() will return "null")
         if (parser.currentToken() == Token.VALUE_NULL) {
@@ -990,9 +1000,11 @@ public class ScrollReader implements Closeable {
         Token t = parser.currentToken();
 
         if (t == null) {
+            System.out.println("*** t was null");
             t = parser.nextToken();
         }
         if (t == Token.START_OBJECT) {
+            System.out.println("*** t was start object");
             t = parser.nextToken();
         }
 
@@ -1012,6 +1024,7 @@ public class ScrollReader implements Closeable {
 
         for (; parser.currentToken() != Token.END_OBJECT;) {
             String currentName = parser.currentName();
+            System.out.println("*** currentName: " + currentName);
             String nodeMapping = fieldMapping;
 
             if (nodeMapping != null) {
@@ -1026,7 +1039,7 @@ public class ScrollReader implements Closeable {
             if (!absoluteName.equals(nodeMapping)) {
                 throw new EsHadoopParsingException("Different node mapping " + absoluteName + "|" + nodeMapping);
             }
-
+            System.out.println("*** absoluteName: " + absoluteName);
             if (shouldSkip(absoluteName)) {
                 Token nt = parser.nextToken();
                 if (nt.isValue()) {
