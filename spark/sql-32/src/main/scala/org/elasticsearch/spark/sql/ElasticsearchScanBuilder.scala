@@ -3,7 +3,7 @@ package org.elasticsearch.spark.sql
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.connector.expressions.aggregate.{Aggregation, Count, CountStar}
 import org.apache.spark.sql.connector.read._
-import org.apache.spark.sql.sources.Filter
+import org.apache.spark.sql.sources.{EqualTo, Filter, IsNotNull}
 import org.apache.spark.sql.types.{IntegerType, MetadataBuilder, StructField, StructType}
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 import org.elasticsearch.hadoop.cfg.Settings
@@ -32,7 +32,16 @@ case class ElasticsearchScanBuilder(
     println("Need to prune everything in " + structType.fields)
   }
 
-  override def pushFilters(filters: Array[Filter]): Array[Filter] = ???
+  override def pushFilters(filters: Array[Filter]): Array[Filter] = {
+    filters.foreach(filter => {
+      val x: String = filter match {
+        case EqualTo(attribute, value) => null
+        case IsNotNull(attribute) => null
+        case _ => null
+      }
+    })
+    return filters //not handling any of them yet
+  }
 
   override def pushAggregation(aggregation: Aggregation): Boolean = {
     println("In pushAggregation...")
