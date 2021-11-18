@@ -20,10 +20,6 @@ case class ElasticsearchTable(
   backingMap.put(ConfigurationOptions.ES_RESOURCE, name)
 
   override def newScanBuilder(options: CaseInsensitiveStringMap): ElasticsearchScanBuilder = {
-    println("Scan Options")
-    options.forEach((key, value) => {
-      println("\t" + key + ": " + value)
-    })
     SchemaUtils.setRowInfo(new MapBackedSettings(backingMap), schema)
     ElasticsearchScanBuilder(sparkSession, schema, options, backingMap)
   }
@@ -34,12 +30,10 @@ case class ElasticsearchTable(
     }
 
   override def schema(): StructType = {
-    println("Getting schema from table...")
     SchemaUtils.discoverMapping(new MapBackedSettings(backingMap)).struct
   }
 
   override def capabilities(): util.Set[TableCapability] = {
-    println("Getting capabilities...")
     val capabilities = new util.HashSet[TableCapability]
     capabilities.add(TableCapability.BATCH_READ)
     capabilities.add(TableCapability.BATCH_WRITE)

@@ -14,16 +14,13 @@ import scala.collection.mutable
 case class ElasticsearchScan(schema: StructType, options: CaseInsensitiveStringMap, backingMap: mutable.Map[String, String],
                              isCountAgg: Boolean)
   extends Scan with Batch with SupportsReportStatistics with SupportsMetadata with Logging {
-  println("Options")
   options.forEach((key, value) => {
-    println("\t" + key + ": " + value)
     backingMap.addOne(key, value)
   })
   val settings = new MapBackedSettings(backingMap)
   SchemaUtils.setRowInfo(settings, schema)
 
   override def readSchema(): StructType = {
-    println("Getting schema from scan builder...")
     schema
   }
 

@@ -80,7 +80,6 @@ case class ElasticsearchPartitionReaderFactory(settingsMap: mutable.Map[String, 
         if (scrollQuery != null) {
           val row = scrollQuery.next()
           val realRow: ScalaEsRow = row(1).asInstanceOf[ScalaEsRow]
-          System.out.println("next row")
           return new ElasticsearchRow(realRow)
         } else {
           return new SingleValueRow(count.intValue())

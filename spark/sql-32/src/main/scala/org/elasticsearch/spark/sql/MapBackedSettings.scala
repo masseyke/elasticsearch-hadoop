@@ -14,7 +14,6 @@ class MapBackedSettings(backingMap: mutable.Map[String, String]) extends Setting
   override def getProperty(name: String): String = backingMap.getOrElse(name, null)
 
   override def setProperty(name: String, value: String): Unit = {
-    println("Setting " + name + ": " + value)
     backingMap.addOne(name, value)
   }
 

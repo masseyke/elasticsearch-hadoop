@@ -32,14 +32,11 @@ class Catalog
 
   override def defaultNamespace(): Array[String] = {
     val ns = super.defaultNamespace()
-    println(s"defaultNamespace = ${ns.toSeq}")
     ns
   }
 
   override def initialize(name: String, options: CaseInsensitiveStringMap): Unit = {
-    println("Options")
     options.forEach((key, value) => {
-      println("\t" + key + ": " + value)
       backingMap.addOne(key, value)
     })
     val settings = new MapBackedSettings(backingMap)
@@ -48,43 +45,35 @@ class Catalog
     InitializationUtils.setValueReaderIfNotSet(settings, classOf[ScalaRowValueReader], log)
     InitializationUtils.setUserProviderIfNotSet(settings, classOf[HadoopUserProvider], log)
     import scala.collection.JavaConverters._
-    println(s">>> initialize($name, ${options.asScala})")
   }
 
   override def listNamespaces(): Array[Array[String]] = {
-    println(">>> listNamespaces()")
     Array.empty
   }
 
   override def listNamespaces(namespace: Array[String]): Array[Array[String]] = {
-    println(s">>> listNamespaces($namespace)")
     Array(Array("org", "elasticsearch"))
   }
 
   override def loadNamespaceMetadata(namespace: Array[String]): JMap[String, String] = {
-    println(s">>> loadNamespaceMetadata(${namespace.toSeq})")
     import scala.collection.JavaConverters._
     Map.empty[String, String].asJava
   }
 
   override def createNamespace(namespace: Array[String], metadata: JMap[String, String]): Unit = {
     import scala.collection.JavaConverters._
-    println(s">>> createNamespace($namespace, ${metadata.asScala})")
     ???
   }
 
   override def alterNamespace(namespace: Array[String], changes: NamespaceChange*): Unit = {
-    println(s">>> alterNamespace($namespace, $changes)")
     ???
   }
 
   override def dropNamespace(namespace: Array[String]): Boolean = {
-    println(s">>> dropNamespace($namespace)")
     ???
   }
 
   override def listTables(namespace: Array[String]): Array[Identifier] = {
-    println(s">>> listTables(${namespace.toSeq})")
     val result: util.Map[String, AnyRef] = client.get("*/_mapping", null)
     val indices = result.entrySet
     val indexNames = mutable.SortedSet[String]()
@@ -102,7 +91,6 @@ class Catalog
   }
 
   override def loadTable(ident: Identifier): Table = {
-    println(s">>> loadTable($ident)")
     new ElasticsearchTable(ident.name(), sparkSession = SparkSession.active, backingMap)
   }
 
@@ -111,23 +99,18 @@ class Catalog
                             schema: StructType,
                             partitions: Array[Transform],
                             properties: JMap[String, String]): Table = {
-    import scala.collection.JavaConverters._
-    println(s">>> createTable($ident, $schema, $partitions, ${properties.asScala})")
     ???
   }
 
   override def alterTable(ident: Identifier, changes: TableChange*): Table = {
-    println(s">>> alterTable($ident, $changes)")
     ???
   }
 
   override def dropTable(ident: Identifier): Boolean = {
-    println(s">>> dropTable($ident)")
     Success
   }
 
   override def renameTable(oldIdent: Identifier, newIdent: Identifier): Unit = {
-    println(s">>> renameTable($oldIdent, $newIdent)")
   }
 
   override def toString = s"${this.getClass.getCanonicalName}($name)"
