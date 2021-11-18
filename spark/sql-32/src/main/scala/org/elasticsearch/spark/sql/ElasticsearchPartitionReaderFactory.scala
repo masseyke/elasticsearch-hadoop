@@ -55,22 +55,42 @@ case class ElasticsearchPartitionReaderFactory(settingsMap: mutable.Map[String, 
         PartitionDefinition.builder(settings, new Mapping(indexName, indexName, fields)).build(indexName, shardId),
         log
       )
-      partitionReader.client.count()
-      val scrollQuery = partitionReader.scrollQuery()
+      var scrollQuery: ScrollQuery = null
+      var timesCalled = 0
+      var count: Long = 0;
+        if (isCountAgg) {
+          count = partitionReader.client.count(true)
+        } else {
+          scrollQuery = partitionReader.scrollQuery()
+        }
+
       override def next(): Boolean = {
-        System.out.println("hasNext row: " + scrollQuery.hasNext)
-        scrollQuery.hasNext
+        if (scrollQuery != null) {
+          scrollQuery.hasNext
+        } else {
+          if (timesCalled == 0) {
+            timesCalled = timesCalled + 1
+            return true
+          }
+          false
+        }
       }
 
       override def get(): InternalRow = {
-        val row = scrollQuery.next()
-        val realRow: ScalaEsRow = row(1).asInstanceOf[ScalaEsRow]
-        System.out.println("next row")
-        new ElasticsearchRow(realRow)
+        if (scrollQuery != null) {
+          val row = scrollQuery.next()
+          val realRow: ScalaEsRow = row(1).asInstanceOf[ScalaEsRow]
+          System.out.println("next row")
+          return new ElasticsearchRow(realRow)
+        } else {
+          return new SingleValueRow(count.intValue())
+        }
       }
 
       override def close(): Unit = {
+        if (scrollQuery != null) {
           scrollQuery.close()
+        }
       }
     }
   }

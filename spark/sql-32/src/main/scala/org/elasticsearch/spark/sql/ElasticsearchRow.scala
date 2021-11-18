@@ -28,8 +28,7 @@ class ElasticsearchRow(wrappedRow: ScalaEsRow) extends InternalRow {
   override def getShort(i: Int): Short = wrappedRow.getShort(i)
 
   override def getInt(i: Int): Int =  {
-    2
-//    wrappedRow.getInt(i)
+    wrappedRow.getInt(i)
   }
 
   override def getLong(i: Int): Long = {
