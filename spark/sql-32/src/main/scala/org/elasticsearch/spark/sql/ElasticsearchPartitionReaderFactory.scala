@@ -20,7 +20,7 @@ import java.util.Optional
 import scala.collection.mutable
 
 case class ElasticsearchPartitionReaderFactory(settingsMap: mutable.Map[String, String], schema: StructType,
-                                               aggregations: util.Map[String, CompositeAggReader.AggInfo])
+                                               groupBys: util.List[String], aggregations: util.Map[String, CompositeAggReader.AggInfo])
   extends PartitionReaderFactory {
 
   def createScrollReader(inputPartition: InputPartition): PartitionReader[InternalRow] = {
@@ -76,7 +76,7 @@ case class ElasticsearchPartitionReaderFactory(settingsMap: mutable.Map[String, 
     }
   }
 
-  def createAggReader(inputPartition: InputPartition): PartitionReader[InternalRow] = {
+  def createCompositeAggReader(inputPartition: InputPartition): PartitionReader[InternalRow] = {
     val settings = new MapBackedSettings(settingsMap)
     val restRepository = new RestRepository(settings)
     val aggs = new util.HashMap[String, CompositeAggReader.AggInfo]
@@ -93,7 +93,7 @@ case class ElasticsearchPartitionReaderFactory(settingsMap: mutable.Map[String, 
       "_search",
       pit,
       MatchAllQueryBuilder.MATCH_ALL,
-      util.Arrays.asList("message.keyword"),
+      groupBys,
       aggList,
       new CompositeAggReader[AnyRef](valueReader, null, mappings, Optional.empty, aggs))
     System.out.println("About to create partition reader")
@@ -112,6 +112,41 @@ case class ElasticsearchPartitionReaderFactory(settingsMap: mutable.Map[String, 
     }
   }
 
+  def createSimpleAggReader(inputPartition: InputPartition): PartitionReader[InternalRow] = {
+    new PartitionReader[InternalRow] {
+      val partitionDefinition: PartitionDefinition = inputPartition.asInstanceOf[ElasticsearchPartition].partitionDefinition
+      val settings = new MapBackedSettings(settingsMap)
+      val indexName = partitionDefinition.getIndex
+      val shardId = partitionDefinition.getShardId
+      val log = LogFactory.getLog(classOf[ElasticsearchPartitionReaderFactory])
+      val fields : util.Collection[Field] = new util.ArrayList[Field]()
+      val requiredColumns: Array[String] = new Array[String](schema.fields.size)
+      val partitionReader = RestService.createReader(
+        settings,
+        PartitionDefinition.builder(settings, new Mapping(indexName, indexName, fields)).build(indexName, shardId),
+        log
+      )
+      var timesCalled = 0
+      val count = partitionReader.client.count(true)
+
+      override def next(): Boolean = {
+          if (timesCalled == 0) {
+            timesCalled = timesCalled + 1
+            return true
+          }
+          false
+      }
+
+      override def get(): InternalRow = {
+        return new SingleValueRow(count.intValue())
+      }
+
+      override def close(): Unit = {
+      }
+
+    }
+  }
+
   def getMappingFromSchema(): util.HashMap[String, FieldType] = {
     val mappings = new util.HashMap[String, FieldType]
     mappings.put("dept", FieldType.KEYWORD)
@@ -121,10 +156,12 @@ case class ElasticsearchPartitionReaderFactory(settingsMap: mutable.Map[String, 
   }
 
   override def createReader(inputPartition: InputPartition): PartitionReader[InternalRow] = {
-    if (aggregations.isEmpty) {
+    if (aggregations.isEmpty && groupBys.isEmpty) {
       createScrollReader(inputPartition)
+    } else if (!groupBys.isEmpty) {
+      createCompositeAggReader(inputPartition)
     } else {
-      createAggReader(inputPartition)
+      createSimpleAggReader(inputPartition)
     }
   }
 

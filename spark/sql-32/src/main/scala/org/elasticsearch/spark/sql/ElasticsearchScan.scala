@@ -14,7 +14,7 @@ import scala.collection.immutable.HashMap
 import scala.collection.mutable
 
 case class ElasticsearchScan(schema: StructType, options: CaseInsensitiveStringMap, backingMap: mutable.Map[String, String],
-                             aggregations: util.Map[String, CompositeAggReader.AggInfo])
+                             groupBys: util.List[String], aggregations: util.Map[String, CompositeAggReader.AggInfo])
   extends Scan with Batch with SupportsReportStatistics with SupportsMetadata with Logging {
   options.forEach((key, value) => {
     backingMap.addOne(key, value)
@@ -58,7 +58,7 @@ case class ElasticsearchScan(schema: StructType, options: CaseInsensitiveStringM
       }
 
       override def createReaderFactory(): PartitionReaderFactory = {
-        ElasticsearchPartitionReaderFactory(backingMap, schema, aggregations)
+        ElasticsearchPartitionReaderFactory(backingMap, schema, groupBys, aggregations)
       }
     }
   }

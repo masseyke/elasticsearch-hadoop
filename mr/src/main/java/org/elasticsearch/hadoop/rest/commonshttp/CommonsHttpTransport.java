@@ -672,9 +672,10 @@ public class CommonsHttpTransport implements Transport, StatsAware {
         }
 
         // when tracing, log everything
-//        if (log.isTraceEnabled()) {
-            log.error(String.format("Tx %s[%s]@[%s][%s]?[%s] w/ payload [%s]", proxyInfo, request.method().name(), httpInfo, request.path(), request.params(), request.body()));
-//        }
+        if (log.isTraceEnabled()) {
+            log.trace(String.format("Tx %s[%s]@[%s][%s]?[%s] w/ payload [%s]", proxyInfo, request.method().name(), httpInfo, request.path(),
+                    request.params(), request.body()));
+        }
 
         if (executingProvider != null) {
             final HttpMethod method = http;
@@ -689,11 +690,12 @@ public class CommonsHttpTransport implements Transport, StatsAware {
             doExecute(http);
         }
 
-//        if (log.isTraceEnabled()) {
+        if (log.isTraceEnabled()) {
             Socket sk = ReflectionUtils.invoke(GET_SOCKET, conn, (Object[]) null);
             String addr = sk.getLocalAddress().getHostAddress();
-            log.error(String.format("Rx %s@[%s] [%s-%s] [%s]", proxyInfo, addr, http.getStatusCode(), HttpStatus.getStatusText(http.getStatusCode()), http.getResponseBodyAsString()));
-//        }
+            log.trace(String.format("Rx %s@[%s] [%s-%s] [%s]", proxyInfo, addr, http.getStatusCode(),
+                HttpStatus.getStatusText(http.getStatusCode()), http.getResponseBodyAsString()));
+        }
 
         // Parse headers
         Map<String, List<String>> headers = new HashMap<>();

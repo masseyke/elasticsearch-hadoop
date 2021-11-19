@@ -31,11 +31,12 @@ case class ElasticsearchScanBuilder(
   private val _pushedFilters: Array[Filter] = Array.empty
 
   val aggregations: util.Map[String, CompositeAggReader.AggInfo] = new util.HashMap
+  val groupBys: util.List[String] = new util.ArrayList[String]()
 
   override def pushedFilters(): Array[Filter] = _pushedFilters
 
   override def build(): Scan = {
-    ElasticsearchScan(updatedSchema, options, backingMap, aggregations)
+    ElasticsearchScan(updatedSchema, options, backingMap, groupBys, aggregations)
   }
 
   override def pruneColumns(structType: StructType): Unit = {
@@ -346,14 +347,17 @@ case class ElasticsearchScanBuilder(
   }
 
   override def pushAggregation(aggregation: Aggregation): Boolean = {
-    val groupByColumns = aggregation.groupByColumns();
-    groupByColumns.foreach(col => {
+    val groupByColumns = aggregation.groupByColumns()
+    val aggregationExpressions = aggregation.aggregateExpressions()
+    val fields = new Array[StructField](groupByColumns.size + aggregationExpressions.size)
+    groupByColumns.zipWithIndex.foreach{case (col, index) => {
       println("group by column: ")
       col.fieldNames().foreach(fieldName => println("\tfield: " + fieldName))
-    })
-    val aggregationExpressions = aggregation.aggregateExpressions()
+      groupBys.add(col.fieldNames()(0))
+      fields(index) = StructField("message.keyword", StringType, false, new MetadataBuilder().build())
+    }}
+
     println("Aggregate functions: ")
-    val fields = new Array[StructField](aggregationExpressions.size + 1)
     System.out.println("Creating fields with size " + fields.size)
     aggregationExpressions.zipWithIndex.foreach { case (aggregateFunc, index) => {
         println("\tdescribe: " + aggregateFunc.describe())
@@ -407,9 +411,8 @@ case class ElasticsearchScanBuilder(
         val nullable = false
         val metadata = new MetadataBuilder()
       System.out.println("Creating field at index " + index + " with fieldKey: " + fieldKey + " and fieldType: " + fieldType)
-        fields(index) = StructField(fieldKey, fieldType, nullable, metadata.build())
+        fields(index + groupByColumns.size) = StructField(fieldKey, fieldType, nullable, metadata.build())
       }
-      fields(fields.size - 1) = StructField("message.keyword", StringType, false, new MetadataBuilder().build())
       updatedSchema = StructType(fields)
     }
     true
