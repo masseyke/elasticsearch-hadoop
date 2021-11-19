@@ -27,6 +27,7 @@ import org.elasticsearch.hadoop.rest.bulk.BulkResponse;
 import org.elasticsearch.hadoop.rest.query.QueryUtils;
 import org.elasticsearch.hadoop.rest.stats.Stats;
 import org.elasticsearch.hadoop.rest.stats.StatsAware;
+import org.elasticsearch.hadoop.serialization.CompositeAggReader;
 import org.elasticsearch.hadoop.serialization.ScrollReader;
 import org.elasticsearch.hadoop.serialization.ScrollReader.Scroll;
 import org.elasticsearch.hadoop.serialization.ScrollReaderConfigBuilder;
@@ -36,7 +37,6 @@ import org.elasticsearch.hadoop.serialization.bulk.BulkEntryWriter;
 import org.elasticsearch.hadoop.serialization.bulk.MetadataExtractor;
 import org.elasticsearch.hadoop.serialization.dto.NodeInfo;
 import org.elasticsearch.hadoop.serialization.dto.ShardInfo;
-import org.elasticsearch.hadoop.serialization.dto.mapping.FieldParser;
 import org.elasticsearch.hadoop.serialization.dto.mapping.GeoField;
 import org.elasticsearch.hadoop.serialization.dto.mapping.GeoField.GeoType;
 import org.elasticsearch.hadoop.serialization.dto.mapping.Mapping;
@@ -334,6 +334,22 @@ public class RestRepository implements Closeable, StatsAware {
                 stats.aggregate(((StatsAware) scroll).stats());
             }
         }
+    }
+
+    public <T> CompositeAggReader.CompositeAgg<T> aggregateStream(String path, BytesArray body, CompositeAggReader<T> reader) throws IOException {
+        InputStream composite = client.execute(POST, path, body).body();
+        try {
+            return reader.read(composite);
+        } finally {
+            if (composite instanceof StatsAware) {
+                stats.aggregate(((StatsAware) composite).stats());
+            }
+        }
+    }
+
+    public String createPointInTime() throws IOException {
+        // TODO: Use a different setting for the keep alive
+        return client.createPointInTime(resources.getResourceRead().index(), settings.getScrollKeepAlive() + "ms");
     }
 
     public boolean resourceExists(boolean read) {
