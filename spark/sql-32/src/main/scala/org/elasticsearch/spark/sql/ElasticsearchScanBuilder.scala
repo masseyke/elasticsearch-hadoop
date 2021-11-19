@@ -1,17 +1,19 @@
 package org.elasticsearch.spark.sql
 
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.connector.expressions.aggregate.{Aggregation, Count, CountStar}
+import org.apache.spark.sql.connector.expressions.aggregate.{Aggregation, Count, CountStar, Max, Min, Sum}
 import org.apache.spark.sql.connector.read._
 import org.apache.spark.sql.sources.{And, BaseRelation, CreatableRelationProvider, EqualTo, Filter, GreaterThan, GreaterThanOrEqual, In, InsertableRelation, IsNotNull, IsNull, LessThan, LessThanOrEqual, Not, Or}
-import org.apache.spark.sql.types.{DateType, IntegerType, MetadataBuilder, StructField, StructType, TimestampType}
+import org.apache.spark.sql.types.{DataType, DateType, IntegerType, MetadataBuilder, StringType, StructField, StructType, TimestampType}
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 import org.elasticsearch.hadoop.cfg.{InternalConfigurationOptions, Settings}
+import org.elasticsearch.hadoop.serialization.{CompositeAggReader, FieldType}
 import org.elasticsearch.hadoop.serialization.json.JacksonJsonGenerator
 import org.elasticsearch.hadoop.util.{FastByteArrayOutputStream, IOUtils, StringUtils}
 import org.elasticsearch.hadoop.util.SettingsUtils.isEs50
 import org.elasticsearch.spark.serialization.ScalaValueWriter
 
+import java.util
 import java.util.{Calendar, Date, Locale}
 import javax.xml.bind.DatatypeConverter
 import scala.collection.mutable
@@ -28,12 +30,12 @@ case class ElasticsearchScanBuilder(
 
   private val _pushedFilters: Array[Filter] = Array.empty
 
-  private var isCountAgg = false
+  val aggregations: util.Map[String, CompositeAggReader.AggInfo] = new util.HashMap
 
   override def pushedFilters(): Array[Filter] = _pushedFilters
 
   override def build(): Scan = {
-    ElasticsearchScan(updatedSchema, options, backingMap, isCountAgg)
+    ElasticsearchScan(updatedSchema, options, backingMap, aggregations)
   }
 
   override def pruneColumns(structType: StructType): Unit = {
@@ -348,26 +350,68 @@ case class ElasticsearchScanBuilder(
     groupByColumns.foreach(col => {
       println("group by column: ")
       col.fieldNames().foreach(fieldName => println("\tfield: " + fieldName))
-    } )
+    })
     val aggregationExpressions = aggregation.aggregateExpressions()
     println("Aggregate functions: ")
-    aggregationExpressions.foreach(aggregateFunc => {
-      println("\tdescribe: " + aggregateFunc.describe())
-      println("\tclass: " + aggregateFunc.getClass)
-      println("\t" + aggregateFunc)
-      val hasCountAgg = aggregateFunc.isInstanceOf[CountStar] || aggregateFunc.isInstanceOf[Count]
-      if (hasCountAgg) {
-        isCountAgg = true
-        val columnName = "count(\"*\")"
-        val fields = new Array[StructField](1)
-        val metadata = new MetadataBuilder()
+    val fields = new Array[StructField](aggregationExpressions.size + 1)
+    System.out.println("Creating fields with size " + fields.size)
+    aggregationExpressions.zipWithIndex.foreach { case (aggregateFunc, index) => {
+        println("\tdescribe: " + aggregateFunc.describe())
+        println("\tclass: " + aggregateFunc.getClass)
+        println("\t" + aggregateFunc)
+        var fieldKey: String = null
+        var fieldName: String = null
+        var elasticfieldType: FieldType = null
+        var fieldType: DataType = null
+        var aggType: String = null
+        aggregateFunc match {
+          case count: Count => {
+            //TODO: use isDistinct
+            fieldName = count.column.fieldNames()(0) //TODO: what if there are multiple?
+            fieldKey = "COUNT(" + fieldName + ")"
+            elasticfieldType = FieldType.INTEGER //TODO: look this up from the schema?
+            fieldType = IntegerType
+            aggType = "value_count"
+          }
+          case countStar: CountStar => {
+            fieldName = "*"
+            fieldKey = "COUNT(\"*\")"
+            elasticfieldType = FieldType.INTEGER //TODO: look this up from the schema?
+            fieldType = IntegerType
+            aggType = "value_count"
+          }
+          case max: Max => {
+            fieldName = max.column.fieldNames()(0) //TODO: what if there are multiple?
+            fieldKey = "MAX(" + fieldName + ")"
+            elasticfieldType = FieldType.INTEGER //TODO: look this up from the schema?
+            fieldType = IntegerType
+            aggType = "max"
+          }
+          case min: Min => {
+            fieldName = min.column.fieldNames()(0) //TODO: what if there are multiple?
+            fieldKey = "MIN(" + fieldName + ")"
+            elasticfieldType = FieldType.INTEGER //TODO: look this up from the schema?
+            fieldType = IntegerType
+            aggType = "min"
+          }
+          case sum: Sum => {
+            //TODO: use isDistinct
+            fieldName = sum.column.fieldNames()(0) //TODO: what if there are multiple?
+            fieldKey = "SUM(" + fieldName + ")"
+            elasticfieldType = FieldType.INTEGER //TODO: look this up from the schema?
+            fieldType = IntegerType
+            aggType = "sum"
+          }
+        }
+        aggregations.put(fieldKey, new CompositeAggReader.AggInfo(fieldKey, fieldName, elasticfieldType, aggType))
         val nullable = false
-        val columnType = IntegerType
-        fields(0) = StructField(columnName, columnType, nullable, metadata.build())
-        updatedSchema = StructType(fields)
-        return true
+        val metadata = new MetadataBuilder()
+      System.out.println("Creating field at index " + index + " with fieldKey: " + fieldKey + " and fieldType: " + fieldType)
+        fields(index) = StructField(fieldKey, fieldType, nullable, metadata.build())
       }
-    })
-    return false
+      fields(fields.size - 1) = StructField("message.keyword", StringType, false, new MetadataBuilder().build())
+      updatedSchema = StructType(fields)
+    }
+    true
   }
 }

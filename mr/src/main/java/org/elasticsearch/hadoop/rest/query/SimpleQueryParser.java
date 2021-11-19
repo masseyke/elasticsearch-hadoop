@@ -45,6 +45,7 @@ public class SimpleQueryParser {
      * @throws IOException
      */
      public static QueryBuilder parse(String raw, boolean isQuery) throws IOException {
+         System.out.println("***** raw: " + raw);
         if (raw.startsWith("?")) {
             return parseURI(raw.substring(1));
         } else if (raw.startsWith("{")) {
