@@ -269,6 +269,12 @@ public class ScrollReader implements Closeable {
     private Scroll read(Parser parser, BytesArray input) {
         // get scroll_id
         Token token = ParsingUtils.seek(parser, SCROLL_ID);
+        if (token == null) { // no scroll id is returned for frozen indices
+            if (log.isTraceEnabled()) {
+                log.info("No scroll id found, likely because the index is frozen");
+            }
+            return null;
+        }
         Assert.isTrue(token == Token.VALUE_STRING, "invalid response");
         String scrollId = parser.text();
         System.out.println("ScrollId: " + scrollId);
@@ -904,7 +910,12 @@ public class ScrollReader implements Closeable {
             String rawValue = parser.text();
             try {
                 if (isArrayField(fieldMapping)) {
-                    return singletonList(fieldMapping, parseValue(parser, esType), parser);
+                    Object parsedValue = parseValue(parser, esType);
+                    if (parsedValue == null) {
+                        return null; //There is not a null element in the array. The array itself is null.
+                    } else {
+                        return singletonList(fieldMapping, parsedValue, parser);
+                    }
                 } else {
                     return parseValue(parser, esType);
                 }

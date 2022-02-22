@@ -18,15 +18,14 @@
  */
 package org.elasticsearch.spark.serialization
 
-import scala.collection.Map
-import scala.collection.immutable.Nil
+import org.elasticsearch.hadoop.EsHadoopIllegalArgumentException
 import org.elasticsearch.hadoop.serialization.Generator
 import org.elasticsearch.hadoop.serialization.builder.JdkValueWriter
 import org.elasticsearch.hadoop.serialization.builder.ValueWriter.Result
 import org.elasticsearch.spark.serialization.{ReflectionUtils => RU}
-import org.elasticsearch.hadoop.EsHadoopIllegalArgumentException
 
-import scala.collection.mutable
+import scala.collection.immutable.Nil
+import scala.collection.{Map, mutable}
 
 class ScalaValueWriter(writeUnknownTypes: Boolean = false) extends JdkValueWriter(writeUnknownTypes) {
 
@@ -62,10 +61,18 @@ class ScalaValueWriter(writeUnknownTypes: Boolean = false) extends JdkValueWrite
         generator.writeBeginObject()
         for ((k, v) <- m) {
           if (shouldKeep(parentField, k.toString)) {
-            generator.writeFieldName(k.toString)
-            val result = doWrite(v, generator, k.toString)
-            if (!result.isSuccesful) {
-              return result
+            val hasValue = Option(v) match {
+              case Some(()) => false
+              case Some(None) => false
+              case Some(_) => true
+              case None => true
+            }
+            if (hasValue || hasWriteNullValues) {
+              generator.writeFieldName(k.toString)
+              val result = doWrite(v, generator, k.toString)
+              if (!result.isSuccesful) {
+                return result
+              }
             }
           }
         }

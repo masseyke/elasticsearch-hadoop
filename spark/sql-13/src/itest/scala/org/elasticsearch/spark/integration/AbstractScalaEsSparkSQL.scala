@@ -23,7 +23,6 @@ import java.{lang => jl}
 import java.sql.Timestamp
 import java.{util => ju}
 import java.util.concurrent.TimeUnit
-
 import scala.collection.JavaConversions.propertiesAsScalaMap
 import scala.collection.JavaConverters.asScalaBufferConverter
 import scala.collection.JavaConverters.mapAsJavaMapConverter
@@ -68,6 +67,8 @@ import org.junit.runners.Parameterized.Parameters
 import org.junit.runners.MethodSorters
 import com.esotericsoftware.kryo.io.{Input => KryoInput}
 import com.esotericsoftware.kryo.io.{Output => KryoOutput}
+import org.apache.spark.rdd.RDD
+
 import javax.xml.bind.DatatypeConverter
 import org.elasticsearch.hadoop.{EsHadoopIllegalArgumentException, EsHadoopIllegalStateException}
 import org.apache.spark.sql.types.DoubleType
@@ -418,6 +419,33 @@ class AbstractScalaEsScalaSparkSQL(prefix: String, readMetadata: jl.Boolean, pus
     //dataFrame.take(5).foreach(println)
     val results = sqc.sql("SELECT name FROM datfile WHERE id >=1 AND id <=10")
     //results.take(5).foreach(println)
+  }
+
+  @Test
+  def testEmptyStrings(): Unit = {
+    val data = Seq(("Java", "20000"), ("Python", ""), ("Scala", "3000"))
+    val rdd: RDD[Row] = sc.parallelize(data).map(row => Row(row._1, row._2))
+    val schema = StructType( Array(
+      StructField("language", StringType,true),
+      StructField("description", StringType,true)
+    ))
+    val inputDf = sqc.createDataFrame(rdd, schema)
+    inputDf.write
+      .format("org.elasticsearch.spark.sql")
+      .save("empty_strings_test")
+    val reader = sqc.read.format("org.elasticsearch.spark.sql")
+    val outputDf = reader.load("empty_strings_test")
+    assertEquals(data.size, outputDf.count)
+    val nullDescriptionsDf = outputDf.filter("language = 'Python'")
+    assertEquals(1, nullDescriptionsDf.count)
+    assertEquals(null, nullDescriptionsDf.first().getAs("description"))
+
+    val reader2 = sqc.read.format("org.elasticsearch.spark.sql").option("es.field.read.empty.as.null", "no")
+    val outputDf2 = reader2.load("empty_strings_test")
+    assertEquals(data.size, outputDf2.count)
+    val emptyDescriptionsDf = outputDf2.filter("language = 'Python'")
+    assertEquals(1, emptyDescriptionsDf.count)
+    assertEquals("", emptyDescriptionsDf.first().getAs("description"))
   }
   
   @Test
@@ -2212,6 +2240,70 @@ class AbstractScalaEsScalaSparkSQL(prefix: String, readMetadata: jl.Boolean, pus
     df.show
     println(df.selectExpr("count(*)").show(5))
     assertEquals(2, df.count())
+  }
+
+  @Test
+  def testArraysAndNulls() {
+    val index = wrapIndex("sparksql-test-arrays-and-nulls")
+    val typed = "data"
+    val (target, docPath) = makeTargets(index, typed)
+    RestUtils.touch(index)
+    val document1 = """{ "id": 1, "status_code" : [123]}""".stripMargin
+    val document2 = """{ "id" : 2, "status_code" : []}""".stripMargin
+    val document3 = """{ "id" : 3, "status_code" : null}""".stripMargin
+    sc.makeRDD(Seq(document1, document2, document3)).saveJsonToEs(target)
+    RestUtils.refresh(index)
+    val df = sqc.read.format("es").option("es.read.field.as.array.include","status_code").load(index)
+      .select("id", "status_code")
+    var result = df.where("id = 1").first().getList(1)
+    assertEquals(123, result.get(0))
+    result = df.where("id = 2").first().getList(1)
+    assertTrue(result.isEmpty)
+    assertTrue(df.where("id = 3").first().isNullAt(1))
+  }
+
+  @Test
+  def testReadFieldInclude(): Unit = {
+    val data = Seq(
+      Row(Row(List(Row("hello","2"), Row("world","1"))))
+    )
+    val rdd: RDD[Row] = sc.parallelize(data)
+    val schema = new StructType()
+      .add("features", new StructType()
+        .add("hashtags", new ArrayType(new StructType()
+          .add("text", StringType)
+          .add("count", StringType), true)))
+
+    val inputDf = sqc.createDataFrame(rdd, schema)
+    inputDf.write
+      .format("org.elasticsearch.spark.sql")
+      .save("read_field_include_test")
+    val reader = sqc.read.format("org.elasticsearch.spark.sql").option("es.read.field.as.array.include","features.hashtags")
+
+    // No "es.read.field.include", so everything is included:
+    var df = reader.load("read_field_include_test")
+    var result = df.select("features.hashtags").first().getAs[IndexedSeq[Row]](0)
+    assertEquals(2, result(0).size)
+    assertEquals("hello", result(0).getAs("text"))
+    assertEquals("2", result(0).getAs("count"))
+
+    // "es.read.field.include" has trailing wildcard, so everything included:
+    df = reader.option("es.read.field.include","features.hashtags.*").load("read_field_include_test")
+    result = df.select("features.hashtags").first().getAs[IndexedSeq[Row]](0)
+    assertEquals(2, result(0).size)
+    assertEquals("hello", result(0).getAs("text"))
+    assertEquals("2", result(0).getAs("count"))
+
+    // "es.read.field.include" includes text but not count
+    df = reader.option("es.read.field.include","features.hashtags.text").load("read_field_include_test")
+    result = df.select("features.hashtags").first().getAs[IndexedSeq[Row]](0)
+    assertEquals(1, result(0).size)
+    assertEquals("hello", result(0).getAs("text"))
+
+    // "es.read.field.include" does not include the leaves in the hierarchy so they won't be returned
+    df = reader.option("es.read.field.include","features.hashtags").load("read_field_include_test")
+    result = df.select("features.hashtags").first().getAs[IndexedSeq[Row]](0)
+    assertEquals(0, result(0).size)
   }
 
   /**

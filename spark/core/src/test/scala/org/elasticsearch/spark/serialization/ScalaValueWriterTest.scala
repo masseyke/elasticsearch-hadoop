@@ -18,18 +18,19 @@
  */
 package org.elasticsearch.spark.serialization
 
-import org.elasticsearch.hadoop.serialization.json.JacksonJsonGenerator
-import org.junit.Test
-import org.junit.Assert._
-import java.io.ByteArrayOutputStream
-
 import org.elasticsearch.hadoop.cfg.ConfigurationOptions
 import org.elasticsearch.hadoop.cfg.Settings
 import org.elasticsearch.hadoop.serialization.EsHadoopSerializationException
+import org.elasticsearch.hadoop.serialization.json.JacksonJsonGenerator
 import org.elasticsearch.hadoop.util.TestSettings
-import org.elasticsearch.spark.serialization.testbeans.Contact
-import org.elasticsearch.spark.serialization.testbeans.ContactBook
+import org.elasticsearch.spark.serialization.testbeans.{Contact, ContactBook}
+import org.junit.Assert._
+import org.junit.Test
 
+import java.io.ByteArrayOutputStream
+import java.sql.Timestamp
+import java.time.ZoneId
+import java.util.Date
 import scala.beans.BeanProperty
 
 class ScalaValueWriterTest {
@@ -151,6 +152,75 @@ class ScalaValueWriterTest {
     node2.node = node1
 
     println(serialize(node1))
+  }
+
+  @Test
+  def testCaseClassWithNone(): Unit = {
+
+    case class TestCaseClass(option : Option[String])
+    val caseClass = TestCaseClass(None)
+
+    assertEquals("""{}""", serialize(caseClass))
+  }
+
+  @Test
+  def testCaseClassWithSome(): Unit = {
+
+    case class TestCaseClass(option : Option[String])
+    val caseClass = TestCaseClass(Some("value"))
+
+    assertEquals("""{"option":"value"}""", serialize(caseClass))
+  }
+
+
+  @Test
+  def testCaseClassWithSomeAndNone(): Unit = {
+
+    case class TestCaseClass(option1 : Option[String], option2 : Option[String])
+    val caseClass = TestCaseClass(None, Some("value2"))
+
+    assertEquals("""{"option2":"value2"}""", serialize(caseClass))
+  }
+
+
+  @Test
+  def testCaseClassWithInnerObject(): Unit = {
+
+    case class TestCaseClass(option1 : Option[String], option2 : Option[TestCaseClassInner])
+    case class TestCaseClassInner(option1 : Option[String], option2 : Option[String])
+    val caseClass = TestCaseClass(None, Some(TestCaseClassInner(option1 = Some("value1") , option2 = None)))
+
+    assertEquals("""{"option2":{"option1":"value1"}}""", serialize(caseClass))
+  }
+
+  @Test
+  def testCaseClassWithInnerObjectAndNullSetting(): Unit = {
+
+    case class TestCaseClass(option1: Option[String], option2: Option[TestCaseClassInner], option3: Any)
+    case class TestCaseClassInner(option1: Option[String], option2: Option[String])
+    val caseClass = TestCaseClass(None, Some(TestCaseClassInner(option1 = Some("value1"), option2 = None)), ())
+
+    val settings = new TestSettings()
+    settings.setProperty(ConfigurationOptions.ES_SPARK_DATAFRAME_WRITE_NULL_VALUES, "true")
+
+    assertEquals("""{"option1":null,"option2":{"option1":"value1","option2":null},"option3":null}""", serialize(caseClass, settings))
+  }
+
+  @Test
+  def testDate(): Unit = {
+    val date = new Date(1420114230123l)
+    val actual = serialize(date);
+    val expected = "\"" + date.toInstant.atZone(ZoneId.systemDefault).toOffsetDateTime.toString + "\""
+    assertEquals(expected, actual)
+  }
+
+  @Test
+  def testDateWithNanos(): Unit = {
+    val timestamp = new Timestamp(1420114230123l)
+    timestamp.setNanos(123456789)
+    val actual = serialize(timestamp);
+    val expected = "\"" + timestamp.toInstant.atZone(ZoneId.systemDefault).toOffsetDateTime.toString + "\""
+    assertEquals(expected, actual)
   }
 
 }
