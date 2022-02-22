@@ -428,6 +428,7 @@ public abstract class RestService implements Serializable {
             log.warn(String.format("No mapping found for [%s] - either no index exists or the partition configuration has been corrupted", partition));
         }
 
+        // TODO: Determine what kind of read operation we want to perform?
         ScrollReader scrollReader = new ScrollReader(ScrollReaderConfigBuilder.builder(reader, fieldMapping, settings));
         if (settings.getNodesClientOnly()) {
             String clientNode = repository.getRestClient().getCurrentNode();

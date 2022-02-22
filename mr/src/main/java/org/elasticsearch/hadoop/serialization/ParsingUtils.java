@@ -305,7 +305,12 @@ public abstract class ParsingUtils {
         generator.writeEndArray();
         parser.nextToken();
     }
-    
+
+    /**
+     * Like parser.skipChildren, except this does not require the parser cursor to be pointing to a start object or array token.
+     * This will continue consuming tokens from the stream until the block the cursor is currently in is exited.
+     * @param parser
+     */
     public static void skipCurrentBlock(Parser parser) {
         int open = 1;
 
