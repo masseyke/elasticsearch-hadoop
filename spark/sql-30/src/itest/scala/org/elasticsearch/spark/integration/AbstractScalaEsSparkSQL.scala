@@ -2602,4 +2602,20 @@ class AbstractScalaEsScalaSparkSQL(prefix: String, readMetadata: jl.Boolean, pus
     val lines = Files.readAllLines(path, StandardCharsets.ISO_8859_1).asScala.toSeq
     sc.parallelize(lines)
   }
+
+  @Test
+  def testCatalog() {
+    val index = wrapIndex("catalog-index")
+    val typed = "data"
+    val (target, docPath) = makeTargets(index, typed)
+    RestUtils.postData(docPath, "{\"test\":\"data\"}".getBytes("UTF-8"))
+    val df = sqc.read.format("es").load(index)
+    RestUtils.refresh(index)
+
+    val testsRestCluster = sqc.getConf("tests.rest.cluster")
+    sqc.getAllConfs.foreach(entry => {if (entry._1.startsWith("es")) sqc.setConf("spark.sql.catalog.demo." + entry._1, entry._2)})
+    sqc.sql("SET spark.sql.catalog.demo=org.elasticsearch.spark.sql.Catalog")
+    assertEquals(1l, sqc.sql("select count(*) from demo.`defaultcatalog-index`").first().get(0))
+    assertEquals("data", sqc.sql("select test from demo.`defaultcatalog-index`").first().get(0))
+  }
 }

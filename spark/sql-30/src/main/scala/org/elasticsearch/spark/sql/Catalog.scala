@@ -44,7 +44,6 @@ class Catalog
     val log = LogFactory.getLog(classOf[Catalog])
     InitializationUtils.setValueReaderIfNotSet(settings, classOf[ScalaRowValueReader], log)
     InitializationUtils.setUserProviderIfNotSet(settings, classOf[HadoopUserProvider], log)
-    import scala.collection.JavaConverters._
   }
 
   override def listNamespaces(): Array[Array[String]] = {
@@ -61,7 +60,6 @@ class Catalog
   }
 
   override def createNamespace(namespace: Array[String], metadata: JMap[String, String]): Unit = {
-    import scala.collection.JavaConverters._
     ???
   }
 
