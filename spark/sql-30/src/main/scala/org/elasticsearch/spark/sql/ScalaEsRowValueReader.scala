@@ -72,6 +72,12 @@ class ScalaRowValueReader extends ScalaValueReader with RowValueReader with Valu
     }
   }
 
+  //TODO: hack
+  override def beginField(fieldName: String): Unit = {
+    super.beginField(fieldName)
+    sparkRowField = fieldName
+  }
+
   // start array
   override def createArray(typ: FieldType): AnyRef = {
 

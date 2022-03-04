@@ -2604,18 +2604,52 @@ class AbstractScalaEsScalaSparkSQL(prefix: String, readMetadata: jl.Boolean, pus
   }
 
   @Test
-  def testCatalog() {
+  def test000Catalog() {
     val index = wrapIndex("catalog-index")
     val typed = "data"
     val (target, docPath) = makeTargets(index, typed)
-    RestUtils.postData(docPath, "{\"test\":\"data\"}".getBytes("UTF-8"))
+
+    val mapping = wrapMapping("data", s"""{
+                                         | "properties" : {
+                                         |   "customer_id" : { "type" : "$keyword" },
+                                         |    "country" : { "type" : "$keyword" }
+                                         | }
+      }""".stripMargin)
+
+    RestUtils.touch(index)
+    RestUtils.putMapping(index, "", mapping.getBytes(StringUtils.UTF_8))
+    val doc1 = s"""{"customer_id": "1", "country":"US"}"""
+    val doc2 = s"""{"customer_id": "2", "country":"Canada"}"""
+    val doc3 = s"""{"customer_id": "3", "country":"US"}"""
+    val doc4 = s"""{"customer_id": "4", "country":"US"}"""
+    RestUtils.postData(docPath, doc1.getBytes("UTF-8"))
+    RestUtils.postData(docPath, doc2.getBytes("UTF-8"))
+    RestUtils.postData(docPath, doc3.getBytes("UTF-8"))
+    RestUtils.postData(docPath, doc4.getBytes("UTF-8"))
     val df = sqc.read.format("es").load(index)
     RestUtils.refresh(index)
 
     val testsRestCluster = sqc.getConf("tests.rest.cluster")
     sqc.getAllConfs.foreach(entry => {if (entry._1.startsWith("es")) sqc.setConf("spark.sql.catalog.demo." + entry._1, entry._2)})
     sqc.sql("SET spark.sql.catalog.demo=org.elasticsearch.spark.sql.Catalog")
-    assertEquals(1l, sqc.sql("select count(*) from demo.`defaultcatalog-index`").first().get(0))
-    assertEquals("data", sqc.sql("select test from demo.`defaultcatalog-index`").first().get(0))
+    assertEquals(4L, sqc.sql("select count(*) from demo.`" + index + "`").first().get(0))
+    assertEquals("1", sqc.sql("select customer_id from demo.`" + index + "`").first().get(0))
+    assertEquals("1", sqc.sql("select customer_id from demo.`" + index + "` where customer_id is not null").first().get(0))
+    assertEquals(index, sqc.sql("show tables in demo").toDF().select("tableName").first().get(0))
+    assertEquals("org.elasticsearch", sqc.sql("show tables in demo").toDF().select("namespace").first().get(0))
+    assertEquals(false, sqc.sql("show tables in demo").toDF().select("isTemporary").first().get(0))
+    val groupByResults = sqc.sql("select count(customer_id), country from demo.`" + index + "` group by country").collect()
+    assertEquals(2, groupByResults.length)
+    val countryIndex = groupByResults(0).fieldIndex("country")
+    val countIndex = groupByResults(0).fieldIndex("count(customer_id)")
+    if(groupByResults(0).get(countryIndex).equals("Canada")) {
+      assertEquals(1L, groupByResults(0).get(countIndex))
+      assertEquals("US", groupByResults(1).get(countryIndex))
+      assertEquals(3L, groupByResults(1).get(countIndex))
+    } else {
+      assertEquals(1L, groupByResults(1).get(countIndex))
+      assertEquals("US", groupByResults(0).get(countryIndex))
+      assertEquals(3L, groupByResults(0).get(countIndex))
+    }
   }
 }

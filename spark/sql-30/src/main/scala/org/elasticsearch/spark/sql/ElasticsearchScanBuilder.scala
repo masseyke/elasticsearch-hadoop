@@ -4,7 +4,7 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.connector.expressions.aggregate.{Aggregation, Count, CountStar, Max, Min, Sum}
 import org.apache.spark.sql.connector.read._
 import org.apache.spark.sql.sources.{And, BaseRelation, CreatableRelationProvider, EqualTo, Filter, GreaterThan, GreaterThanOrEqual, In, InsertableRelation, IsNotNull, IsNull, LessThan, LessThanOrEqual, Not, Or}
-import org.apache.spark.sql.types.{DataType, DateType, IntegerType, MetadataBuilder, StringType, StructField, StructType, TimestampType}
+import org.apache.spark.sql.types.{DataType, DateType, IntegerType, LongType, MetadataBuilder, StringType, StructField, StructType, TimestampType}
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 import org.elasticsearch.hadoop.cfg.{InternalConfigurationOptions, Settings}
 import org.elasticsearch.hadoop.serialization.{CompositeAggReader, FieldType}
@@ -352,9 +352,10 @@ case class ElasticsearchScanBuilder(
     val fields = new Array[StructField](groupByColumns.size + aggregationExpressions.size)
     groupByColumns.zipWithIndex.foreach{case (col, index) => {
       println("group by column: ")
-      col.fieldNames().foreach(fieldName => println("\tfield: " + fieldName))
-      groupBys.add(col.fieldNames()(0))
-      fields(index) = StructField("message.keyword", StringType, false, new MetadataBuilder().build())
+      col.fieldNames().zipWithIndex.foreach{case (fieldName, innerIndex) => {
+        fields((index + 1) * innerIndex) = StructField(fieldName, StringType, false, new MetadataBuilder().build())
+        groupBys.add(fieldName)
+      }}
     }}
 
     println("Aggregate functions: ")
@@ -373,15 +374,15 @@ case class ElasticsearchScanBuilder(
           //TODO: use isDistinct
           fieldName = count.column.fieldNames()(0) //TODO: what if there are multiple?
           fieldKey = "COUNT(" + fieldName + ")"
-          elasticfieldType = FieldType.INTEGER //TODO: look this up from the schema?
-          fieldType = IntegerType
+          elasticfieldType = FieldType.LONG //TODO: look this up from the schema?
+          fieldType = LongType
           aggType = "value_count"
         }
         case countStar: CountStar => {
           fieldName = "*"
           fieldKey = "COUNT(\"*\")"
-          elasticfieldType = FieldType.INTEGER //TODO: look this up from the schema?
-          fieldType = IntegerType
+          elasticfieldType = FieldType.LONG //TODO: look this up from the schema?
+          fieldType = LongType
           aggType = "value_count"
         }
         case max: Max => {

@@ -270,6 +270,7 @@ public class CompositeAggReader<T> implements Closeable {
             T bucketResult = parseBucket(parser);
             buckets.add(bucketResult);
             token = parser.currentToken();
+            reader.beginField("_"); //TODO: Hack
         }
         parser.nextToken(); // Eliminate END_ARRAY
 
@@ -387,6 +388,12 @@ public class CompositeAggReader<T> implements Closeable {
             reader.addToMap(record, reader.wrapString(countStarAgg.getFieldName()), parseValue(parser, countStarAgg.getFieldType()));
             reader.endField(countStarAgg.getFieldName());
             // parseValue advances to next token
+        } else if (targetAggs.isEmpty() == false) {
+            targetAggs.values().stream().forEach(aggInfo -> { //TODO: we lose order here so it'll break for > 1
+                reader.beginField(aggInfo.fieldKey);
+                reader.addToMap(record, reader.wrapString(aggInfo.fieldKey), parseValue(parser, aggInfo.fieldType));
+                reader.endField(aggInfo.fieldKey);
+            });
         } else {
             parser.nextToken(); // Advance to next field
         }

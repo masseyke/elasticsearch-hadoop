@@ -5,7 +5,7 @@ import org.apache.spark.sql.catalyst.util.{ArrayData, MapData}
 import org.apache.spark.sql.types.{DataType, Decimal}
 import org.apache.spark.unsafe.types.{CalendarInterval, UTF8String}
 
-class SingleValueRow(value: Int) extends InternalRow {
+class SingleValueRow(value: Long) extends InternalRow {
   override def numFields: Int = ???
 
   override def setNullAt(i: Int): Unit = ???
@@ -22,9 +22,9 @@ class SingleValueRow(value: Int) extends InternalRow {
 
   override def getShort(ordinal: Int): Short = ???
 
-  override def getInt(ordinal: Int): Int = value
+  override def getInt(ordinal: Int): Int = value.toInt
 
-  override def getLong(ordinal: Int): Long = ???
+  override def getLong(ordinal: Int): Long = value
 
   override def getFloat(ordinal: Int): Float = ???
 

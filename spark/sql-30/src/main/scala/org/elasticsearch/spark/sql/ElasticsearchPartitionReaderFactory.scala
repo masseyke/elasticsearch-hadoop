@@ -80,15 +80,11 @@ case class ElasticsearchPartitionReaderFactory(settingsMap: mutable.Map[String, 
   def createCompositeAggReader(inputPartition: InputPartition): PartitionReader[InternalRow] = {
     val settings = new MapBackedSettings(settingsMap)
     val restRepository = new RestRepository(settings)
-    val aggs = new util.HashMap[String, CompositeAggReader.AggInfo]
-    System.out.println("About to create pit")
     val pit = restRepository.createPointInTime()
-    System.out.println("Pit created")
     val valueReader: ValueReader = ObjectUtils.instantiate("org.elasticsearch.spark.sql.ScalaRowValueReader", settings)
 
     val mappings = getMappingFromSchema()
-    val aggList = new util.ArrayList[CompositeAggReader.AggInfo](aggs.values)
-    System.out.println("About to create aggQuery")
+    val aggList = new util.ArrayList[CompositeAggReader.AggInfo](aggregations.values)
     val aggQuery = new CompositeAggQuery[AnyRef](
       restRepository,
       "_search",
@@ -96,16 +92,13 @@ case class ElasticsearchPartitionReaderFactory(settingsMap: mutable.Map[String, 
       MatchAllQueryBuilder.MATCH_ALL,
       groupBys,
       aggList,
-      new CompositeAggReader[AnyRef](valueReader, null, mappings, Optional.empty.asInstanceOf[Optional[AggInfo]], aggs))
-    System.out.println("About to create partition reader")
+      new CompositeAggReader[AnyRef](valueReader, null, mappings, Optional.empty.asInstanceOf[Optional[AggInfo]], aggregations))
     new PartitionReader[InternalRow] {
       override def next(): Boolean = {
-        System.out.println("About to check for next")
         aggQuery.hasNext
       }
 
       override def get(): InternalRow = {
-        System.out.println("Getting next")
         new ElasticsearchRow(aggQuery.next().asInstanceOf[ScalaEsRow])
       }
 
@@ -139,7 +132,7 @@ case class ElasticsearchPartitionReaderFactory(settingsMap: mutable.Map[String, 
       }
 
       override def get(): InternalRow = {
-        return new SingleValueRow(count.intValue())
+        return new SingleValueRow(count.longValue())
       }
 
       override def close(): Unit = {
@@ -150,10 +143,16 @@ case class ElasticsearchPartitionReaderFactory(settingsMap: mutable.Map[String, 
 
   def getMappingFromSchema(): util.HashMap[String, FieldType] = {
     val mappings = new util.HashMap[String, FieldType]
-    mappings.put("dept", FieldType.KEYWORD)
-    mappings.put("age", FieldType.INTEGER)
-    mappings.put("salary", FieldType.INTEGER)
+    schema.foreach(field => mappings.put(field.name, lookupEsTypeFromSparkType(field.dataType)))
     mappings
+  }
+
+  def lookupEsTypeFromSparkType(sparkType: DataType): FieldType = {
+    sparkType match {
+      case StringType => FieldType.KEYWORD
+      case IntegerType => FieldType.INTEGER
+      case LongType => FieldType.LONG
+    }
   }
 
   override def createReader(inputPartition: InputPartition): PartitionReader[InternalRow] = {
