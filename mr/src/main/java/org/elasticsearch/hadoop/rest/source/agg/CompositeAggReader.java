@@ -44,9 +44,9 @@ public class CompositeAggReader<T> implements Closeable {
 
     public static class CompositeAgg<T> {
         private final String pitId;
-        private final CompositeAggResult<T> result;
+        private final AggResult<T> result;
 
-        public CompositeAgg(String pitId, CompositeAggResult<T> result) {
+        public CompositeAgg(String pitId, AggResult<T> result) {
             this.pitId = pitId;
             this.result = result;
         }
@@ -55,12 +55,38 @@ public class CompositeAggReader<T> implements Closeable {
             return pitId;
         }
 
-        public CompositeAggResult<T> getResult() {
+        public AggResult<T> getResult() {
             return result;
         }
     }
 
-    public static class CompositeAggResult<T> {
+    public interface AggResult<T> {
+        BytesArray getAfterKey();
+        List<T> getRows();
+        boolean isConcluded();
+    }
+
+    public static class SimpleAggResult<T> implements AggResult<T> {
+        private final List<T> rows;
+
+        public SimpleAggResult(List<T> rows) {
+            this.rows = rows;
+        }
+
+        public BytesArray getAfterKey() {
+            return null;
+        }
+
+        public List<T> getRows() {
+            return rows;
+        }
+
+        public boolean isConcluded() {
+            return false;
+        }
+    }
+
+    public static class CompositeAggResult<T> implements AggResult<T> {
         private final BytesArray afterKey;
         private final List<T> rows;
         private final boolean concluded;
@@ -167,7 +193,7 @@ public class CompositeAggReader<T> implements Closeable {
         Assert.isTrue(parser.currentToken() == Token.START_OBJECT, "invalid response; invalid start of stream.");
 
         String pitId = null;
-        CompositeAggResult<T> result = null;
+        AggResult<T> result = null;
 
         Token token = parser.nextToken();
         while (token != Token.END_OBJECT) {
@@ -195,14 +221,14 @@ public class CompositeAggReader<T> implements Closeable {
         return new CompositeAgg<>(pitId, result);
     }
 
-    private CompositeAggResult<T> parseAggregations(Parser parser, BytesArray copy) {
+    private AggResult<T> parseAggregations(Parser parser, BytesArray copy) {
         Assert.notNull(parser);
         Assert.isTrue(parser.currentToken() == Token.START_OBJECT, "invalid response; missing composite aggregate object start");
 
         // Locate our target aggregation. Non-empty aggregations field is required.
         Token token = parser.nextToken();
         Assert.isTrue(token == Token.FIELD_NAME, "invalid response; missing any aggregations");
-        CompositeAggResult<T> compositeAggResult = null;
+        AggResult<T> compositeAggResult = null;
         while (token != Token.END_OBJECT) {
             String aggregationName = parser.currentName();
             parser.nextToken(); // START_OBJECT
@@ -210,15 +236,32 @@ public class CompositeAggReader<T> implements Closeable {
                 compositeAggResult = parseCompositeAggregation(parser, copy);
                 token = parser.currentToken();
             } else {
-                // Skip the entire aggregation since it's not the one we're looking for (sanity)
-                parser.skipChildren();
-                token = parser.nextToken(); // Eliminate END_OBJECT
+                compositeAggResult = parseSimpleAggregation(aggregationName, parser, copy);
+                token = parser.currentToken();
             }
         }
         parser.nextToken(); // Eliminate END_OBJECT
         Assert.notNull(compositeAggResult, "invalid response; missing composite aggregation");
 
         return compositeAggResult;
+    }
+
+    private SimpleAggResult<T> parseSimpleAggregation(String aggName, Parser parser, BytesArray copy) {
+        Assert.notNull(parser);
+        Assert.isTrue(parser.currentToken() == Token.START_OBJECT, "invalid response; missing composite aggregate object start");
+        parser.nextToken();
+        List<T> rows = new ArrayList<>();
+        String fieldName = parser.currentName();
+        Assert.isTrue(FIELD_VALUE.equals(fieldName));
+        parser.nextToken();
+        Object singleValue = parser.currentValue();
+        parser.nextToken(); // Eliminate END_OBJECT
+        T row = (T) reader.createMap();
+        reader.beginField(aggName);
+        reader.addToMap(row, aggName, singleValue);
+        reader.endField(aggName);
+        rows.add(row);
+        return new SimpleAggResult<>(rows);
     }
 
     private CompositeAggResult<T> parseCompositeAggregation(Parser parser, BytesArray copy) {

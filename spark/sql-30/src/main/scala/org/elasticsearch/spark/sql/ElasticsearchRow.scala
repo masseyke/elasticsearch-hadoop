@@ -37,6 +37,8 @@ class ElasticsearchRow(wrappedRow: ScalaEsRow) extends InternalRow {
       return rawField.asInstanceOf[Long]
     } else if (rawField.isInstanceOf[Timestamp]) {
       return rawField.asInstanceOf[Timestamp].getTime
+    } else if (rawField.isInstanceOf[Number]) {
+      return rawField.asInstanceOf[Number].longValue()
     }
     ???
   }

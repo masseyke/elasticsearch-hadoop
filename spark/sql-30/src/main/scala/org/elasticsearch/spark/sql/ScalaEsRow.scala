@@ -39,13 +39,13 @@ private[spark] class ScalaEsRow(private[spark] val rowOrder: Seq[String]) extend
   
   override def isNullAt(i: Int) = values(i) == null
 
-  override def getInt(i: Int): Int = getAs[Int](i)
+  override def getInt(i: Int): Int = getAs[Number](i).intValue()
 
-  override def getLong(i: Int): Long = getAs[Long](i)
+  override def getLong(i: Int): Long = getAs[Number](i).longValue()
 
-  override def getDouble(i: Int): Double = getAs[Double](i)
+  override def getDouble(i: Int): Double = getAs[Number](i).doubleValue()
 
-  override def getFloat(i: Int): Float = getAs[Float](i)
+  override def getFloat(i: Int): Float = getAs[Number](i).floatValue()
 
   override def getBoolean(i: Int): Boolean = getAs[Boolean](i)
 

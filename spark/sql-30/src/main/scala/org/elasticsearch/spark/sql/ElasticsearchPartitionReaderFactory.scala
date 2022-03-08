@@ -106,41 +106,6 @@ case class ElasticsearchPartitionReaderFactory(settingsMap: mutable.Map[String, 
     }
   }
 
-  def createSimpleAggReader(inputPartition: InputPartition): PartitionReader[InternalRow] = {
-    new PartitionReader[InternalRow] {
-      val partitionDefinition: PartitionDefinition = inputPartition.asInstanceOf[ElasticsearchPartition].partitionDefinition
-      val settings = new MapBackedSettings(settingsMap)
-      val indexName = partitionDefinition.getIndex
-      val shardId = partitionDefinition.getShardId
-      val log = LogFactory.getLog(classOf[ElasticsearchPartitionReaderFactory])
-      val fields : util.Collection[Field] = new util.ArrayList[Field]()
-      val requiredColumns: Array[String] = new Array[String](schema.fields.size)
-      val partitionReader = RestService.createReader(
-        settings,
-        PartitionDefinition.builder(settings, new Mapping(indexName, indexName, fields)).build(indexName, shardId),
-        log
-      )
-      var timesCalled = 0
-      val count = partitionReader.client.count(true)
-
-      override def next(): Boolean = {
-        if (timesCalled == 0) {
-          timesCalled = timesCalled + 1
-          return true
-        }
-        false
-      }
-
-      override def get(): InternalRow = {
-        return new SingleValueRow(count.longValue())
-      }
-
-      override def close(): Unit = {
-      }
-
-    }
-  }
-
   def getMappingFromSchema(): util.HashMap[String, FieldType] = {
     val mappings = new util.HashMap[String, FieldType]
     schema.foreach(field => mappings.put(field.name, lookupEsTypeFromSparkType(field.dataType)))
@@ -158,10 +123,8 @@ case class ElasticsearchPartitionReaderFactory(settingsMap: mutable.Map[String, 
   override def createReader(inputPartition: InputPartition): PartitionReader[InternalRow] = {
     if (aggregations.isEmpty && groupBys.isEmpty) {
       createScrollReader(inputPartition)
-    } else if (!groupBys.isEmpty) {
-      createCompositeAggReader(inputPartition)
     } else {
-      createSimpleAggReader(inputPartition)
+      createCompositeAggReader(inputPartition)
     }
   }
 

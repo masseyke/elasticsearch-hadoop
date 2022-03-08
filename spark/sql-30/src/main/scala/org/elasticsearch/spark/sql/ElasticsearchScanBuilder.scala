@@ -351,19 +351,13 @@ case class ElasticsearchScanBuilder(
     val aggregationExpressions = aggregation.aggregateExpressions()
     val fields = new Array[StructField](groupByColumns.size + aggregationExpressions.size)
     groupByColumns.zipWithIndex.foreach{case (col, index) => {
-      println("group by column: ")
       col.fieldNames().zipWithIndex.foreach{case (fieldName, innerIndex) => {
         fields((index + 1) * innerIndex) = StructField(fieldName, StringType, false, new MetadataBuilder().build())
         groupBys.add(fieldName)
       }}
     }}
 
-    println("Aggregate functions: ")
-    System.out.println("Creating fields with size " + fields.size)
     aggregationExpressions.zipWithIndex.foreach { case (aggregateFunc, index) => {
-      println("\tdescribe: " + aggregateFunc.describe())
-      println("\tclass: " + aggregateFunc.getClass)
-      println("\t" + aggregateFunc)
       var fieldKey: String = null
       var fieldName: String = null
       var elasticfieldType: FieldType = null
@@ -379,7 +373,7 @@ case class ElasticsearchScanBuilder(
           aggType = "value_count"
         }
         case countStar: CountStar => {
-          fieldName = "*"
+          fieldName = updatedSchema.fieldNames(0)
           fieldKey = "COUNT(\"*\")"
           elasticfieldType = FieldType.LONG //TODO: look this up from the schema?
           fieldType = LongType
@@ -411,7 +405,6 @@ case class ElasticsearchScanBuilder(
       aggregations.put(fieldKey, new CompositeAggReader.AggInfo(fieldKey, fieldName, elasticfieldType, aggType))
       val nullable = false
       val metadata = new MetadataBuilder()
-      System.out.println("Creating field at index " + index + " with fieldKey: " + fieldKey + " and fieldType: " + fieldType)
       fields(index + groupByColumns.size) = StructField(fieldKey, fieldType, nullable, metadata.build())
     }
       updatedSchema = StructType(fields)

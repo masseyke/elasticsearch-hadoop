@@ -118,55 +118,21 @@ public class CompositeAggQuery<T> implements Iterator<T>, Closeable, StatsAware 
     }
 
     private void nextBatch() throws IOException {
-        // Create request body
-        // TODO: Maybe we can reuse parts of the bulk request templating api here?
-        FastByteArrayOutputStream out = new FastByteArrayOutputStream(256);
-        JacksonJsonGenerator generator = new JacksonJsonGenerator(out);
-        try {
-            generator.writeBeginObject();
-            {
-                generator.writeFieldName("size").writeNumber(0);
-                generator.writeFieldName("track_total_hits").writeBoolean(false);
-                // Query
-                generator.writeFieldName("query").writeBeginObject();
+        if (groupByFields.isEmpty()) {
+            FastByteArrayOutputStream out = new FastByteArrayOutputStream(256);
+            JacksonJsonGenerator generator = new JacksonJsonGenerator(out);
+            try {
+                generator.writeBeginObject();
                 {
-                    queryBuilder.toJson(generator);
-                }
-                generator.writeEndObject();
-                // Point in Time
-                generator.writeFieldName("pit").writeBeginObject();
-                {
-                    generator.writeFieldName("id").writeString(currentPitId);
-                    generator.writeFieldName("keep_alive").writeString("5m"); // TODO Make configurable
-                }
-                generator.writeEndObject();
-                // Aggs
-                generator.writeFieldName("aggs").writeBeginObject();
-                {
-                    generator.writeFieldName("COMPOSITE").writeBeginObject(); // TODO Field name configurable? Helpful?
+                    generator.writeFieldName("size").writeNumber(0);
+                    // Query
+                    generator.writeFieldName("query").writeBeginObject();
                     {
-                        generator.writeFieldName("composite").writeBeginObject();
-                        {
-                            generator.writeFieldName("size").writeNumber(10000); // TODO Configurable
-                            generator.writeFieldName("sources").writeBeginArray();
-                            for (String groupByField : groupByFields) {
-                                generator.writeBeginObject()
-                                        .writeFieldName(groupByField).writeBeginObject()
-                                        .writeFieldName("terms").writeBeginObject()
-                                        .writeFieldName("field").writeString(groupByField)
-                                        .writeEndObject()
-                                        .writeEndObject()
-                                        .writeEndObject();
-                            }
-                            generator.writeEndArray();
-//                            if (afterKey != null) {
-//                                // TODO: Generators can't take a regular chunk of already made JSON and add it to the
-//                                //  stream. This needs to be changed in order to paginate the data coming in.
-//                                generator.writeFieldName("after_key");
-//                                // add after_key contents to generator
-//                            }
-                        }
-                        generator.writeEndObject();
+                        queryBuilder.toJson(generator);
+                    }
+                    generator.writeEndObject();
+                    // Aggs
+                    {
                         generator.writeFieldName("aggs").writeBeginObject();
                         for (CompositeAggReader.AggInfo aggregate : aggregates) {
                             generator.writeFieldName(aggregate.getFieldKey()).writeBeginObject()
@@ -177,20 +143,89 @@ public class CompositeAggQuery<T> implements Iterator<T>, Closeable, StatsAware 
                         }
                         generator.writeEndObject();
                     }
+                }
+                generator.writeEndObject();
+            } finally {
+                generator.close();
+            }
+            CompositeAggReader.CompositeAgg<T> composite = repository.aggregateStream(endpoint, out.bytes(), reader);
+            batch = composite.getResult().getRows();
+            finished = false;
+        } else {
+            // Create request body
+            // TODO: Maybe we can reuse parts of the bulk request templating api here?
+            FastByteArrayOutputStream out = new FastByteArrayOutputStream(256);
+            JacksonJsonGenerator generator = new JacksonJsonGenerator(out);
+            try {
+                generator.writeBeginObject();
+                {
+                    generator.writeFieldName("size").writeNumber(0);
+                    generator.writeFieldName("track_total_hits").writeBoolean(false);
+                    // Query
+                    generator.writeFieldName("query").writeBeginObject();
+                    {
+                        queryBuilder.toJson(generator);
+                    }
+                    generator.writeEndObject();
+                    // Point in Time
+                    generator.writeFieldName("pit").writeBeginObject();
+                    {
+                        generator.writeFieldName("id").writeString(currentPitId);
+                        generator.writeFieldName("keep_alive").writeString("5m"); // TODO Make configurable
+                    }
+                    generator.writeEndObject();
+                    // Aggs
+                    generator.writeFieldName("aggs").writeBeginObject();
+                    {
+                        generator.writeFieldName("COMPOSITE").writeBeginObject(); // TODO Field name configurable? Helpful?
+                        {
+                            generator.writeFieldName("composite").writeBeginObject();
+                            {
+                                generator.writeFieldName("size").writeNumber(10000); // TODO Configurable
+                                generator.writeFieldName("sources").writeBeginArray();
+                                for (String groupByField : groupByFields) {
+                                    generator.writeBeginObject()
+                                            .writeFieldName(groupByField).writeBeginObject()
+                                            .writeFieldName("terms").writeBeginObject()
+                                            .writeFieldName("field").writeString(groupByField)
+                                            .writeEndObject()
+                                            .writeEndObject()
+                                            .writeEndObject();
+                                }
+                                generator.writeEndArray();
+//                            if (afterKey != null) {
+//                                // TODO: Generators can't take a regular chunk of already made JSON and add it to the
+//                                //  stream. This needs to be changed in order to paginate the data coming in.
+//                                generator.writeFieldName("after_key");
+//                                // add after_key contents to generator
+//                            }
+                            }
+                            generator.writeEndObject();
+                            generator.writeFieldName("aggs").writeBeginObject();
+                            for (CompositeAggReader.AggInfo aggregate : aggregates) {
+                                generator.writeFieldName(aggregate.getFieldKey()).writeBeginObject()
+                                        .writeFieldName(aggregate.getAggType()).writeBeginObject()
+                                        .writeFieldName("field").writeString(aggregate.getFieldName())
+                                        .writeEndObject()
+                                        .writeEndObject();
+                            }
+                            generator.writeEndObject();
+                        }
+                        generator.writeEndObject();
+                    }
                     generator.writeEndObject();
                 }
                 generator.writeEndObject();
+            } finally {
+                generator.close();
             }
-            generator.writeEndObject();
-        } finally {
-            generator.close();
-        }
 
-        CompositeAggReader.CompositeAgg<T> composite = repository.aggregateStream(endpoint, out.bytes(), reader);
-        currentPitId = composite.getPitId();
-        afterKey = composite.getResult().getAfterKey();
-        batch = composite.getResult().getRows();
-        finished = composite.getResult().isConcluded();
+            CompositeAggReader.CompositeAgg<T> composite = repository.aggregateStream(endpoint, out.bytes(), reader);
+            currentPitId = composite.getPitId();
+            afterKey = composite.getResult().getAfterKey();
+            batch = composite.getResult().getRows();
+            finished = composite.getResult().isConcluded();
+        }
     }
 
     public long getRead() {

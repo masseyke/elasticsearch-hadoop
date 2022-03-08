@@ -2604,24 +2604,24 @@ class AbstractScalaEsScalaSparkSQL(prefix: String, readMetadata: jl.Boolean, pus
   }
 
   @Test
-  def test000Catalog() {
+  def testCatalog() {
     val index = wrapIndex("catalog-index")
     val typed = "data"
     val (target, docPath) = makeTargets(index, typed)
 
     val mapping = wrapMapping("data", s"""{
                                          | "properties" : {
-                                         |   "customer_id" : { "type" : "$keyword" },
+                                         |   "customer_id" : { "type" : "integer" },
                                          |    "country" : { "type" : "$keyword" }
                                          | }
       }""".stripMargin)
 
     RestUtils.touch(index)
     RestUtils.putMapping(index, "", mapping.getBytes(StringUtils.UTF_8))
-    val doc1 = s"""{"customer_id": "1", "country":"US"}"""
-    val doc2 = s"""{"customer_id": "2", "country":"Canada"}"""
-    val doc3 = s"""{"customer_id": "3", "country":"US"}"""
-    val doc4 = s"""{"customer_id": "4", "country":"US"}"""
+    val doc1 = s"""{"customer_id": 1, "country":"US"}"""
+    val doc2 = s"""{"customer_id": 2, "country":"Canada"}"""
+    val doc3 = s"""{"customer_id": 3, "country":"US"}"""
+    val doc4 = s"""{"customer_id": 4, "country":"US"}"""
     RestUtils.postData(docPath, doc1.getBytes("UTF-8"))
     RestUtils.postData(docPath, doc2.getBytes("UTF-8"))
     RestUtils.postData(docPath, doc3.getBytes("UTF-8"))
@@ -2632,12 +2632,16 @@ class AbstractScalaEsScalaSparkSQL(prefix: String, readMetadata: jl.Boolean, pus
     val testsRestCluster = sqc.getConf("tests.rest.cluster")
     sqc.getAllConfs.foreach(entry => {if (entry._1.startsWith("es")) sqc.setConf("spark.sql.catalog.demo." + entry._1, entry._2)})
     sqc.sql("SET spark.sql.catalog.demo=org.elasticsearch.spark.sql.Catalog")
+    assertEquals(4L, sqc.sql("select count(customer_id) from demo.`" + index + "`").first().get(0))
     assertEquals(4L, sqc.sql("select count(*) from demo.`" + index + "`").first().get(0))
-    assertEquals("1", sqc.sql("select customer_id from demo.`" + index + "`").first().get(0))
-    assertEquals("1", sqc.sql("select customer_id from demo.`" + index + "` where customer_id is not null").first().get(0))
+    assertEquals(1, sqc.sql("select customer_id from demo.`" + index + "`").first().get(0))
+    assertEquals(1, sqc.sql("select customer_id from demo.`" + index + "` where customer_id is not null").first().get(0))
     assertEquals(index, sqc.sql("show tables in demo").toDF().select("tableName").first().get(0))
     assertEquals("org.elasticsearch", sqc.sql("show tables in demo").toDF().select("namespace").first().get(0))
     assertEquals(false, sqc.sql("show tables in demo").toDF().select("isTemporary").first().get(0))
+    assertEquals(4, sqc.sql("select max(customer_id) from demo.`" + index + "`").first().get(0))
+    assertEquals(1, sqc.sql("select min(customer_id) from demo.`" + index + "`").first().get(0))
+    assertEquals(10L, sqc.sql("select sum(customer_id) from demo.`" + index + "`").first().get(0))
     val groupByResults = sqc.sql("select count(customer_id), country from demo.`" + index + "` group by country").collect()
     assertEquals(2, groupByResults.length)
     val countryIndex = groupByResults(0).fieldIndex("country")
