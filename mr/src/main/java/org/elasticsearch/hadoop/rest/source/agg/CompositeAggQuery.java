@@ -56,8 +56,8 @@ public class CompositeAggQuery<T> implements Iterator<T>, Closeable, StatsAware 
     private boolean closed = false;
     private boolean initialized = false;
 
-    public CompositeAggQuery(RestRepository client, String endpoint, String pitId, QueryBuilder query, List<String> groupByFields,
-                             List<CompositeAggReader.AggInfo> aggregates, CompositeAggReader<T> reader) {
+    public CompositeAggQuery(RestRepository client, String endpoint, String pitId, QueryBuilder query,
+                             List<String> groupByFields, List<CompositeAggReader.AggInfo> aggregates, CompositeAggReader<T> reader) {
         this.repository = client;
         this.reader = reader;
         this.endpoint = endpoint;

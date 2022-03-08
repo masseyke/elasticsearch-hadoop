@@ -16,6 +16,7 @@ import org.elasticsearch.spark.serialization.ScalaValueWriter
 import java.util
 import java.util.{Calendar, Date, Locale}
 import javax.xml.bind.DatatypeConverter
+import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.collection.mutable.{LinkedHashSet, ListBuffer}
 
@@ -28,19 +29,22 @@ case class ElasticsearchScanBuilder(
   var updatedSchema: StructType = schema
   @transient lazy val valueWriter = { new ScalaValueWriter }
 
-  private val _pushedFilters: Array[Filter] = Array.empty
-
+  private var _pushedFilters: Array[Filter] = Array.empty
+  private var filterStrings: Array[String] = Array.empty
   val aggregations: util.Map[String, CompositeAggReader.AggInfo] = new util.HashMap
   val groupBys: util.List[String] = new util.ArrayList[String]()
+  val filters: util.List[String] = new util.ArrayList[String]()
 
   override def pushedFilters(): Array[Filter] = _pushedFilters
 
   override def build(): Scan = {
-    ElasticsearchScan(updatedSchema, options, backingMap, groupBys, aggregations)
+    backingMap.remove(InternalConfigurationOptions.INTERNAL_ES_QUERY_FILTERS)
+    ElasticsearchScan(updatedSchema, options, backingMap, filterStrings, groupBys,
+      aggregations)
   }
 
   override def pruneColumns(structType: StructType): Unit = {
-    println("Need to prune everything in " + structType.fields)
+    updatedSchema = new StructType(schema.fields.filter(field => structType.fields.contains(field)))
   }
 
   private def createDSLFromFilters(filters: Array[Filter], strictPushDown: Boolean, isES50: Boolean): (Array[Filter], Array[String]) = {
@@ -332,11 +336,12 @@ case class ElasticsearchScanBuilder(
           Utils.LOGGER.debug(s"Pushing down filters ${filters.mkString("[", ",", "]")}")
         }
         val filterInfo: (Array[Filter], Array[String]) = createDSLFromFilters(filters, Utils.isPushDownStrict(settings), isEs50(settings))
-        val filterString = filterInfo._2
+        filterStrings = filterInfo._2
         if (Utils.LOGGER.isTraceEnabled()) {
-          Utils.LOGGER.trace(s"Transformed filters into DSL ${filterString.mkString("[", ",", "]")}")
+          Utils.LOGGER.trace(s"Transformed filters into DSL ${filterStrings.mkString("[", ",", "]")}")
         }
-        backingMap.put(InternalConfigurationOptions.INTERNAL_ES_QUERY_FILTERS , IOUtils.serializeToBase64(filterString))
+        backingMap.put(InternalConfigurationOptions.INTERNAL_ES_QUERY_FILTERS , IOUtils.serializeToBase64(filterStrings))
+        _pushedFilters = filters.filter(filter => !filterInfo._1.contains(filter))
         return filterInfo._1
       } else {
         return filters

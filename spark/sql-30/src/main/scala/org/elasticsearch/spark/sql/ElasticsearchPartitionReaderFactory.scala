@@ -1,26 +1,25 @@
 package org.elasticsearch.spark.sql
 
 import org.apache.commons.logging.LogFactory
-import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.connector.read.{InputPartition, PartitionReader, PartitionReaderFactory}
 import org.apache.spark.sql.types._
 import org.elasticsearch.hadoop.rest._
-import org.elasticsearch.hadoop.rest.query.MatchAllQueryBuilder
+import org.elasticsearch.hadoop.rest.query.{BoolQueryBuilder, MatchAllQueryBuilder, QueryBuilder, RawQueryBuilder}
 import org.elasticsearch.hadoop.rest.source.agg.CompositeAggQuery
 import org.elasticsearch.hadoop.serialization.CompositeAggReader.AggInfo
 import org.elasticsearch.hadoop.serialization.FieldType._
-import org.elasticsearch.hadoop.serialization.builder.{JdkValueReader, ValueReader}
+import org.elasticsearch.hadoop.serialization.builder.ValueReader
 import org.elasticsearch.hadoop.serialization.dto.mapping.{Field, Mapping}
 import org.elasticsearch.hadoop.serialization.{CompositeAggReader, FieldType}
 import org.elasticsearch.hadoop.util.{ObjectUtils, StringUtils}
-import org.elasticsearch.spark.sql._
 
 import java.util
 import java.util.Optional
+import scala.collection.JavaConverters.seqAsJavaListConverter
 import scala.collection.mutable
 
-case class ElasticsearchPartitionReaderFactory(settingsMap: mutable.Map[String, String], schema: StructType,
+case class ElasticsearchPartitionReaderFactory(settingsMap: mutable.Map[String, String], schema: StructType, filters:Array[String],
                                                groupBys: util.List[String], aggregations: util.Map[String, CompositeAggReader.AggInfo])
   extends PartitionReaderFactory {
 
@@ -89,7 +88,7 @@ case class ElasticsearchPartitionReaderFactory(settingsMap: mutable.Map[String, 
       restRepository,
       "_search",
       pit,
-      MatchAllQueryBuilder.MATCH_ALL,
+      getQuery(),
       groupBys,
       aggList,
       new CompositeAggReader[AnyRef](valueReader, null, mappings, Optional.empty.asInstanceOf[Optional[AggInfo]], aggregations))
@@ -103,6 +102,15 @@ case class ElasticsearchPartitionReaderFactory(settingsMap: mutable.Map[String, 
       }
 
       override def close(): Unit = aggQuery.close()
+    }
+  }
+
+  def getQuery: QueryBuilder = {
+    if (filters.isEmpty) {
+      MatchAllQueryBuilder.MATCH_ALL
+    } else {
+      new BoolQueryBuilder().filters(
+        filters.map(filter => new RawQueryBuilder(filter, false)).toList.asJava.asInstanceOf[java.util.Collection[QueryBuilder]])
     }
   }
 
