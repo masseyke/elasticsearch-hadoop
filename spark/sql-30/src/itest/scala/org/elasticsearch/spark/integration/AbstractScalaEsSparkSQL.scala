@@ -2635,7 +2635,7 @@ class AbstractScalaEsScalaSparkSQL(prefix: String, readMetadata: jl.Boolean, pus
     assertEquals(2L, sqc.sql("select count(customer_id) from demo.`" + index + "` where customer_id > 2").first().get(0))
     assertEquals(4L, sqc.sql("select count(customer_id) from demo.`" + index + "`").first().get(0))
     assertEquals(4L, sqc.sql("select count(*) from demo.`" + index + "`").first().get(0))
-    assertEquals(1, sqc.sql("select customer_id from demo.`" + index + "` order by customer_id asc").first().get(0))
+    assertEquals(4, sqc.sql("select customer_id from demo.`" + index + "` order by customer_id desc").first().get(0))
     assertEquals(1, sqc.sql("select customer_id from demo.`" + index + "` where customer_id is not null").first().get(0))
     assertEquals(index, sqc.sql("show tables in demo").toDF().select("tableName").first().get(0))
     assertEquals("org.elasticsearch", sqc.sql("show tables in demo").toDF().select("namespace").first().get(0))

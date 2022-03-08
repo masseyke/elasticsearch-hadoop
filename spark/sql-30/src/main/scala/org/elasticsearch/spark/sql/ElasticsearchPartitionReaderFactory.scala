@@ -88,7 +88,7 @@ case class ElasticsearchPartitionReaderFactory(settingsMap: mutable.Map[String, 
       restRepository,
       "_search",
       pit,
-      getQuery(),
+      getQuery,
       groupBys,
       aggList,
       new CompositeAggReader[AnyRef](valueReader, null, mappings, Optional.empty.asInstanceOf[Optional[AggInfo]], aggregations))
